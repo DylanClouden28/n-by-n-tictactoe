@@ -1,101 +1,267 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState } from "react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
+import { Minus, Plus } from "lucide-react";
+import { User, Computer, Trophy, Repeat, Swords } from "lucide-react";
+
+// Enums for game state management
+enum GameMode {
+  HUMAN_VS_HUMAN = "HUMAN_VS_HUMAN",
+  HUMAN_VS_COMPUTER = "HUMAN_VS_COMPUTER",
+  COMPUTER_VS_COMPUTER = "COMPUTER_VS_COMPUTER",
+}
+
+enum GameStatus {
+  NOT_STARTED = "NOT_STARTED",
+  IN_PROGRESS = "IN_PROGRESS",
+  WIN = "WIN",
+  DRAW = "DRAW",
+}
+
+export default function TicTacToe() {
+  // Original state
+  const [boardSize, setBoardSize] = useState<number>(3);
+  const [board, setBoard] = useState<Array<string | null>>(() =>
+    Array(boardSize * boardSize).fill(null)
+  );
+  const [xIsNext, setXIsNext] = useState<boolean>(true);
+
+  // New state for game modes and status
+  const [gameMode, setGameMode] = useState<GameMode>(GameMode.HUMAN_VS_HUMAN);
+  const [gameStatus, setGameStatus] = useState<GameStatus>(
+    GameStatus.NOT_STARTED
+  );
+  const [winner, setWinner] = useState<string | null>(null);
+  const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
+
+  // Function stubs for game logic
+  const handleComputerMove = () => {
+    // This will be implemented by you to make computer moves
+    console.log("Computer making move...");
+  };
+
+  const checkWinningState = () => {
+    // This will be implemented by you to check win conditions
+    console.log("Checking winning state...");
+  };
+
+  const handleGameOver = (winner: string | null) => {
+    setGameStatus(winner ? GameStatus.WIN : GameStatus.DRAW);
+    setWinner(winner);
+  };
+
+  const startGame = () => {
+    setIsGameStarted(true);
+    setGameStatus(GameStatus.IN_PROGRESS);
+    setBoard(Array(boardSize * boardSize).fill(null));
+    setXIsNext(true);
+    setWinner(null);
+
+    if (gameMode === GameMode.COMPUTER_VS_COMPUTER) {
+      handleComputerMove();
+    }
+  };
+
+  const handleSizeChange = (newSize: number) => {
+    if (newSize < 3) newSize = 3;
+    if (newSize > 10) newSize = 10;
+    setBoardSize(newSize);
+    setBoard(Array(newSize * newSize).fill(null));
+    setXIsNext(true);
+  };
+
+  const handleClick = (index: number) => {
+    if (board[index] || gameStatus !== GameStatus.IN_PROGRESS) return;
+
+    const newBoard = board.slice();
+    newBoard[index] = xIsNext ? "X" : "O";
+    setBoard(newBoard);
+    setXIsNext(!xIsNext);
+
+    // After each move, check for win/draw
+    checkWinningState();
+
+    // If playing against computer, trigger computer move
+    if (
+      gameMode === GameMode.HUMAN_VS_COMPUTER &&
+      gameStatus === GameStatus.IN_PROGRESS
+    ) {
+      handleComputerMove();
+    }
+  };
+
+  const renderGameModeSelection = () => (
+    <div className="space-y-4 mb-6">
+      <Label className="text-lg">Select Game Mode</Label>
+      <div className="flex gap-4 justify-center">
+        <Button
+          variant={gameMode === GameMode.HUMAN_VS_HUMAN ? "default" : "outline"}
+          onClick={() => setGameMode(GameMode.HUMAN_VS_HUMAN)}
+          className="flex gap-2 items-center"
+        >
+          <User className="h-4 w-4" />
+          vs
+          <User className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={
+            gameMode === GameMode.HUMAN_VS_COMPUTER ? "default" : "outline"
+          }
+          onClick={() => setGameMode(GameMode.HUMAN_VS_COMPUTER)}
+          className="flex gap-2 items-center"
+        >
+          <User className="h-4 w-4" />
+          vs
+          <Computer className="h-4 w-4" />
+        </Button>
+        <Button
+          variant={
+            gameMode === GameMode.COMPUTER_VS_COMPUTER ? "default" : "outline"
+          }
+          onClick={() => setGameMode(GameMode.COMPUTER_VS_COMPUTER)}
+          className="flex gap-2 items-center"
+        >
+          <Computer className="h-4 w-4" />
+          vs
+          <Computer className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderGameStatus = () => {
+    if (gameStatus === GameStatus.WIN && winner) {
+      return (
+        <Badge
+          variant="default"
+          className="text-lg px-4 py-2 flex items-center gap-2"
+        >
+          <Trophy className="h-5 w-5" />
+          Player {winner} Wins!
+        </Badge>
+      );
+    } else if (gameStatus === GameStatus.DRAW) {
+      return (
+        <Badge
+          variant="secondary"
+          className="text-lg px-4 py-2 flex items-center gap-2"
+        >
+          <Repeat className="h-5 w-5" />
+          Draw Game
+        </Badge>
+      );
+    } else if (gameStatus === GameStatus.IN_PROGRESS) {
+      return (
+        <Badge
+          variant="outline"
+          className="text-lg px-4 py-2 flex items-center gap-2"
+        >
+          <Swords className="h-5 w-5" />
+          Next Player: {xIsNext ? "X" : "O"}
+        </Badge>
+      );
+    }
+    return null;
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-[90vh] p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold">Tic Tac Toe</h1>
+          {renderGameStatus()}
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {!isGameStarted && renderGameModeSelection()}
+        {!isGameStarted && (
+          <div className="space-y-2 flex flex-col items-center">
+            <Label className="text-lg">
+              Board Size: {boardSize}x{boardSize}
+            </Label>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => handleSizeChange(boardSize - 1)}
+                disabled={boardSize <= 3}
+              >
+                <Minus className="h-4 w-4" />
+              </Button>
+
+              <div className="text-lg font-medium w-8 text-center">
+                {boardSize}
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => handleSizeChange(boardSize + 1)}
+                disabled={boardSize >= 10}
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!isGameStarted ? (
+          <Button
+            variant="default"
+            className="w-full text-lg py-6"
+            onClick={startGame}
+          >
+            Start Game
+          </Button>
+        ) : (
+          <div className="flex flex-col justify-center items-center">
+            <div
+              className="grid gap-2 max-w-lg"
+              style={{
+                gridTemplateColumns: `repeat(${boardSize}, 1fr)`,
+                aspectRatio: "1/1",
+                width: "100%",
+              }}
+            >
+              {Array(boardSize * boardSize)
+                .fill(null)
+                .map((_, index) => (
+                  <Button
+                    key={index}
+                    variant="outline"
+                    className="aspect-square flex items-center justify-center p-0 text-3xl font-bold w-full h-full"
+                    onClick={() => handleClick(index)}
+                    disabled={
+                      gameMode === GameMode.COMPUTER_VS_COMPUTER ||
+                      gameStatus !== GameStatus.IN_PROGRESS
+                    }
+                  >
+                    {board[index]}
+                  </Button>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {isGameStarted && (
+          <Button
+            variant="default"
+            className="w-full text-lg py-6"
+            onClick={() => {
+              setIsGameStarted(false);
+              setGameStatus(GameStatus.NOT_STARTED);
+              setBoard(Array(boardSize * boardSize).fill(null));
+              setXIsNext(true);
+              setWinner(null);
+            }}
+          >
+            New Game
+          </Button>
+        )}
+      </Card>
     </div>
   );
 }
