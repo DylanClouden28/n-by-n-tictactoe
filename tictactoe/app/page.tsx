@@ -7,8 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Minus, Plus } from "lucide-react";
 import { User, Computer, Trophy, Repeat, Swords } from "lucide-react";
+import { checkWinner, getBestMove } from "./minimax";
 
-// Enums for game state management
 enum GameMode {
   HUMAN_VS_HUMAN = "HUMAN_VS_HUMAN",
   HUMAN_VS_COMPUTER = "HUMAN_VS_COMPUTER",
@@ -23,14 +23,11 @@ enum GameStatus {
 }
 
 export default function TicTacToe() {
-  // Original state
   const [boardSize, setBoardSize] = useState<number>(3);
   const [board, setBoard] = useState<Array<string | null>>(() =>
     Array(boardSize * boardSize).fill(null)
   );
   const [xIsNext, setXIsNext] = useState<boolean>(true);
-
-  // New state for game modes and status
   const [gameMode, setGameMode] = useState<GameMode>(GameMode.HUMAN_VS_HUMAN);
   const [gameStatus, setGameStatus] = useState<GameStatus>(
     GameStatus.NOT_STARTED
@@ -38,15 +35,32 @@ export default function TicTacToe() {
   const [winner, setWinner] = useState<string | null>(null);
   const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
 
-  // Function stubs for game logic
-  const handleComputerMove = () => {
-    // This will be implemented by you to make computer moves
-    console.log("Computer making move...");
-  };
+  const handleComputerMove = (
+    currentBoard: Array<string | null>,
+    isX: boolean = false
+  ) => {
+    if (gameStatus !== GameStatus.IN_PROGRESS) return;
 
-  const checkWinningState = () => {
-    // This will be implemented by you to check win conditions
-    console.log("Checking winning state...");
+    const computerSymbol = isX ? "X" : "O";
+    const bestMove = getBestMove(currentBoard, boardSize, computerSymbol);
+
+    if (bestMove !== -1) {
+      const newBoard = [...currentBoard];
+      newBoard[bestMove] = computerSymbol;
+      setBoard(newBoard);
+
+      const winner = checkWinner(newBoard, boardSize);
+      if (winner) {
+        handleGameOver(winner === "DRAW" ? null : winner);
+      } else {
+        setXIsNext(!isX);
+
+        // If computer vs computer, trigger next move after delay
+        if (gameMode === GameMode.COMPUTER_VS_COMPUTER && !winner) {
+          setTimeout(() => handleComputerMove(newBoard, !isX), 1000);
+        }
+      }
+    }
   };
 
   const handleGameOver = (winner: string | null) => {
@@ -61,8 +75,12 @@ export default function TicTacToe() {
     setXIsNext(true);
     setWinner(null);
 
+    // If computer vs computer, start the game
     if (gameMode === GameMode.COMPUTER_VS_COMPUTER) {
-      handleComputerMove();
+      setTimeout(
+        () => handleComputerMove(Array(boardSize * boardSize).fill(null), true),
+        500
+      );
     }
   };
 
@@ -75,22 +93,27 @@ export default function TicTacToe() {
   };
 
   const handleClick = (index: number) => {
-    if (board[index] || gameStatus !== GameStatus.IN_PROGRESS) return;
+    if (
+      board[index] ||
+      gameStatus !== GameStatus.IN_PROGRESS ||
+      (gameMode === GameMode.HUMAN_VS_COMPUTER && !xIsNext)
+    )
+      return;
 
-    const newBoard = board.slice();
+    const newBoard = [...board];
     newBoard[index] = xIsNext ? "X" : "O";
     setBoard(newBoard);
-    setXIsNext(!xIsNext);
 
-    // After each move, check for win/draw
-    checkWinningState();
+    const winner = checkWinner(newBoard, boardSize);
+    if (winner) {
+      handleGameOver(winner === "DRAW" ? null : winner);
+    } else {
+      setXIsNext(!xIsNext);
 
-    // If playing against computer, trigger computer move
-    if (
-      gameMode === GameMode.HUMAN_VS_COMPUTER &&
-      gameStatus === GameStatus.IN_PROGRESS
-    ) {
-      handleComputerMove();
+      // If playing against computer, trigger computer move
+      if (gameMode === GameMode.HUMAN_VS_COMPUTER && !winner) {
+        setTimeout(() => handleComputerMove(newBoard), 500);
+      }
     }
   };
 
@@ -182,7 +205,6 @@ export default function TicTacToe() {
             <Label className="text-lg">
               Board Size: {boardSize}x{boardSize}
             </Label>
-
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
@@ -192,7 +214,6 @@ export default function TicTacToe() {
               >
                 <Minus className="h-4 w-4" />
               </Button>
-
               <div className="text-lg font-medium w-8 text-center">
                 {boardSize}
               </div>
@@ -236,7 +257,9 @@ export default function TicTacToe() {
                     onClick={() => handleClick(index)}
                     disabled={
                       gameMode === GameMode.COMPUTER_VS_COMPUTER ||
-                      gameStatus !== GameStatus.IN_PROGRESS
+                      gameStatus !== GameStatus.IN_PROGRESS ||
+                      board[index] !== null ||
+                      (gameMode === GameMode.HUMAN_VS_COMPUTER && !xIsNext)
                     }
                   >
                     {board[index]}
