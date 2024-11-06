@@ -24,7 +24,7 @@ enum GameStatus {
 
 export default function TicTacToe() {
   const [boardSize, setBoardSize] = useState<number>(3);
-  const [board, setBoard] = useState<Array<string | null>>(() =>
+  const [board, setBoard] = useState<Array<"X" | "O" | null>>(() =>
     Array(boardSize * boardSize).fill(null)
   );
   const [xIsNext, setXIsNext] = useState<boolean>(true);
@@ -34,20 +34,27 @@ export default function TicTacToe() {
   );
   const [winner, setWinner] = useState<string | null>(null);
   const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
-
+  const [debugInfo, setDebugInfo] = useState<{ iterations: number } | null>(
+    null
+  );
   const handleComputerMove = (
-    currentBoard: Array<string | null>,
+    currentBoard: Array<"X" | "O" | null>,
     isX: boolean = false
   ) => {
     if (gameStatus !== GameStatus.IN_PROGRESS) return;
 
     const computerSymbol = isX ? "X" : "O";
-    const bestMove = getBestMove(currentBoard, boardSize, computerSymbol);
+    const { bestMove, iterations } = getBestMove(
+      currentBoard,
+      boardSize,
+      computerSymbol
+    );
 
     if (bestMove !== -1) {
       const newBoard = [...currentBoard];
       newBoard[bestMove] = computerSymbol;
       setBoard(newBoard);
+      setDebugInfo({ iterations: iterations });
 
       const winner = checkWinner(newBoard, boardSize);
       if (winner) {
@@ -66,6 +73,7 @@ export default function TicTacToe() {
   const handleGameOver = (winner: string | null) => {
     setGameStatus(winner ? GameStatus.WIN : GameStatus.DRAW);
     setWinner(winner);
+    setDebugInfo(null);
   };
 
   const startGame = () => {
@@ -112,7 +120,7 @@ export default function TicTacToe() {
 
       // If playing against computer, trigger computer move
       if (gameMode === GameMode.HUMAN_VS_COMPUTER && !winner) {
-        setTimeout(() => handleComputerMove(newBoard), 500);
+        setTimeout(() => handleComputerMove(newBoard), 0);
       }
     }
   };
@@ -239,6 +247,13 @@ export default function TicTacToe() {
           </Button>
         ) : (
           <div className="flex flex-col justify-center items-center">
+            {debugInfo && (
+              <div className="p-2">
+                <Badge className="text-lg">
+                  Number of iterations: {debugInfo.iterations}
+                </Badge>
+              </div>
+            )}
             <div
               className="grid gap-2 max-w-lg"
               style={{
@@ -279,6 +294,7 @@ export default function TicTacToe() {
               setBoard(Array(boardSize * boardSize).fill(null));
               setXIsNext(true);
               setWinner(null);
+              setDebugInfo(null);
             }}
           >
             New Game

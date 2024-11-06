@@ -1,55 +1,69 @@
-// minimax.ts
-import { GameStatus } from "./page.tsx"; // Adjust path if necessary
-
-// Function to check the winner for the current board state
-export const checkWinner = (
-  board: Array<string | null>,
+const checkMaxHasReached = (
+  counts: { [key: string]: number[] },
   boardSize: number
 ): string | null => {
-  // Check rows, columns, and diagonals for a winner
-  for (let i = 0; i < boardSize; i++) {
-    // Check rows
-    if (
-      board[i * boardSize] &&
-      board
-        .slice(i * boardSize, i * boardSize + boardSize)
-        .every((cell) => cell === board[i * boardSize])
-    ) {
-      return board[i * boardSize];
-    }
-    // Check columns
-    if (
-      board[i] &&
-      board
-        .filter((_, idx) => idx % boardSize === i)
-        .every((cell) => cell === board[i])
-    ) {
-      return board[i];
+  for (const player of ["X", "O"]) {
+    if (counts[player].some((count) => count === boardSize)) {
+      return player;
     }
   }
+  return null;
+};
 
-  // Check diagonals
-  if (
-    board[0] &&
-    Array.from({ length: boardSize }).every(
-      (_, i) => board[i * (boardSize + 1)] === board[0]
-    )
-  ) {
-    return board[0];
-  }
-  if (
-    board[boardSize - 1] &&
-    Array.from({ length: boardSize }).every(
-      (_, i) => board[(i + 1) * (boardSize - 1)] === board[boardSize - 1]
-    )
-  ) {
-    return board[boardSize - 1];
+//Check the current state of the board to see if there is a winner
+// Takes state of board
+// Retunrs the current winner, X, O or null (Draw)
+export const checkWinner = (
+  board: Array<"X" | "O" | null>,
+  boardSize: number
+): string | null => {
+  const countPerRow: { X: Array<number>; O: Array<number> } = {
+    X: new Array(boardSize).fill(0),
+    O: new Array(boardSize).fill(0),
+  };
+  const countPerColumn: { X: Array<number>; O: Array<number> } = {
+    X: new Array(boardSize).fill(0),
+    O: new Array(boardSize).fill(0),
+  };
+  const countDiagonals: { X: Array<number>; O: Array<number> } = {
+    X: new Array(2).fill(0),
+    O: new Array(2).fill(0),
+  };
+
+  for (let i = 0; i < boardSize * boardSize; i++) {
+    const currentValue = board[i];
+    if (currentValue == null) continue; // Value if not selected yet
+
+    const currentRow = (i / boardSize) | 0; //Fast way to do int divison in javascript
+    const currentColumn = i % boardSize;
+
+    // Count rows
+    countPerRow[currentValue][currentRow] += 1;
+    // Check columns
+    countPerColumn[currentValue][currentColumn] += 1;
+    // Main Diagonal
+    if (currentRow === currentColumn) {
+      countDiagonals[currentValue][0] += 1;
+    }
+    // Second Diagonal
+    if (currentRow + currentColumn === boardSize - 1) {
+      countDiagonals[currentValue][1] += 1;
+    }
+    //Short Circuit if winner found
+    for (const counts of [countPerRow, countPerColumn, countDiagonals]) {
+      const winner = checkMaxHasReached(counts, boardSize);
+      if (winner) return winner;
+    }
   }
 
   return board.includes(null) ? null : "DRAW";
 };
+
+let miniMaxIterations = 0;
+let highestDepth = 0;
+
 const minimax = (
-  board: Array<string | null>,
+  board: Array<"X" | "O" | null>,
   depth: number,
   isMaximizing: boolean,
   boardSize: number,
@@ -57,7 +71,10 @@ const minimax = (
   beta: number = Infinity
 ): number => {
   const winner = checkWinner(board, boardSize);
-
+  miniMaxIterations += 1;
+  if (highestDepth < depth) {
+    highestDepth = depth;
+  }
   if (winner === "X") return 10 - depth;
   if (winner === "O") return depth - 10;
   if (winner === "DRAW") return 0;
@@ -107,17 +124,22 @@ const minimax = (
 
 // Function to determine the best move for the computer
 export const getBestMove = (
-  board: Array<string | null>,
+  board: Array<"X" | "O" | null>,
   boardSize: number,
-  currentPlayer: string
-): number => {
+  currentPlayer: "X" | "O"
+): { bestMove: number; iterations: number } => {
+  console.log("\nFinding best Move for computer");
   let bestMove = -1;
+  miniMaxIterations = 0;
   let bestValue = currentPlayer === "X" ? -Infinity : Infinity;
 
   for (let i = 0; i < board.length; i++) {
     if (board[i] === null) {
       board[i] = currentPlayer;
+      console.log("Computing bestmove, checking move for: ", i);
       const moveValue = minimax(board, 0, currentPlayer === "O", boardSize);
+      console.log("\tLargest Depth: ", highestDepth);
+      highestDepth = 0;
       board[i] = null;
 
       if (
@@ -129,5 +151,5 @@ export const getBestMove = (
       }
     }
   }
-  return bestMove;
+  return { bestMove: bestMove, iterations: miniMaxIterations };
 };
