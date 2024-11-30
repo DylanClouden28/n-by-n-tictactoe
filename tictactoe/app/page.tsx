@@ -154,11 +154,15 @@ export default function TicTacToe() {
             gameMode === GameMode.COMPUTER_VS_COMPUTER ? "default" : "outline"
           }
           onClick={() => setGameMode(GameMode.COMPUTER_VS_COMPUTER)}
-          className="flex gap-2 items-center"
+          className="flex gap-2 items-center flex-col"
+          disabled={true}
         >
-          <Computer className="h-4 w-4" />
-          vs
-          <Computer className="h-4 w-4" />
+          <div className="flex gap-2 flex-row">
+            <Computer className="h-4 w-4" />
+            vs
+            <Computer className="h-4 w-4" />
+          </div>
+          <Label className="text-sm">Currently broken</Label>
         </Button>
       </div>
     </div>
