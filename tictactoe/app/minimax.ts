@@ -65,7 +65,7 @@ export const checkWinner = (
   return board.includes(null) ? null : "DRAW";
 };
 
-const evalBoardState = (
+export const evalBoardState = (
   board: Array<"X" | "O" | null>,
   boardSize: number
 ): { score: { X: number; O: number }; winner: string | null } => {
@@ -205,7 +205,7 @@ const evalBoardState = (
 let miniMaxIterations = 0;
 let highestDepth = 0;
 
-const minimax = (
+export const minimax = (
   board: Array<"X" | "O" | null>,
   depth: number,
   isMaximizing: boolean,
@@ -216,24 +216,29 @@ const minimax = (
 ): number => {
   const { winner, score } = evalBoardState(board, boardSize);
   miniMaxIterations += 1;
+
   if (highestDepth < depth) {
     highestDepth = depth;
   }
+
+  // Terminal conditions
   if (winner === "X") return 100000;
   if (winner === "O") return -100000;
   if (winner === "DRAW") return 0;
 
   // Return evaluation if we've hit depth limit
   if (depth >= maxDepth) {
-    // For X (maximizing), we want score.X - score.O
-    // For O (minimizing), we want score.O - score.X
-    return isMaximizing ? score.X - score.O : score.O - score.X;
+    const evalScore = isMaximizing ? score.X - score.O : score.O - score.X;
+    return evalScore;
   }
 
   if (isMaximizing) {
     let maxEval = -Infinity;
+    let moveFound = false; // Add this flag
+
     for (let i = 0; i < board.length; i++) {
       if (board[i] === null) {
+        moveFound = true; // Set flag when a move is found
         board[i] = "X";
         const evalScore = minimax(
           board,
@@ -247,14 +252,23 @@ const minimax = (
         board[i] = null;
         maxEval = Math.max(maxEval, evalScore);
         alpha = Math.max(alpha, evalScore);
-        if (beta <= alpha) break; // Beta cut-off
+        if (beta <= alpha) break;
       }
     }
+
+    // If no moves were found, this is effectively a terminal state
+    if (!moveFound) {
+      return isMaximizing ? score.X - score.O : score.O - score.X;
+    }
+
     return maxEval;
   } else {
     let minEval = Infinity;
+    let moveFound = false; // Add this flag
+
     for (let i = 0; i < board.length; i++) {
       if (board[i] === null) {
+        moveFound = true; // Set flag when a move is found
         board[i] = "O";
         const evalScore = minimax(
           board,
@@ -268,9 +282,15 @@ const minimax = (
         board[i] = null;
         minEval = Math.min(minEval, evalScore);
         beta = Math.min(beta, evalScore);
-        if (beta <= alpha) break; // Alpha cut-off
+        if (beta <= alpha) break;
       }
     }
+
+    // If no moves found, this is effectively a terminal state
+    if (!moveFound) {
+      return isMaximizing ? score.X - score.O : score.O - score.X;
+    }
+
     return minEval;
   }
 };
@@ -291,6 +311,13 @@ export const getBestMove = (
     if (board[i] === null) {
       board[i] = currentPlayer;
       console.log("\tComputing bestmove, checking move for: ", i);
+      console.log(
+        "\t\tPre minimax values: ",
+        [...board],
+        currentPlayer,
+        boardSize,
+        MaxDepth
+      );
       const moveValue = minimax(
         board,
         0,

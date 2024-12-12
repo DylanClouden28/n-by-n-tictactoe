@@ -44,7 +44,7 @@ export default function TicTacToe() {
     if (gameStatus !== GameStatus.IN_PROGRESS) return;
 
     const computerSymbol = isX ? "X" : "O";
-    const MaxDepth = 7;
+    const MaxDepth = 4;
     const { bestMove, iterations } = getBestMove(
       currentBoard,
       boardSize,
