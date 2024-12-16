@@ -35,31 +35,39 @@ export default function TicTacToe() {
   const [winner, setWinner] = useState<string | null>(null);
   const [isGameStarted, setIsGameStarted] = useState<boolean>(false);
 
-  const handleComputerMove = (
+  const handleComputerMove = async (
     currentBoard: Array<string | null>,
     isX: boolean = false
   ) => {
     if (gameStatus !== GameStatus.IN_PROGRESS) return;
 
     const computerSymbol = isX ? "X" : "O";
-    const bestMove = getBestMove(currentBoard, boardSize, computerSymbol);
+    try {
+      const bestMove = await getBestMove(
+        currentBoard,
+        boardSize,
+        computerSymbol
+      );
 
-    if (bestMove !== -1) {
-      const newBoard = [...currentBoard];
-      newBoard[bestMove] = computerSymbol;
-      setBoard(newBoard);
+      if (bestMove !== -1) {
+        const newBoard = [...currentBoard];
+        newBoard[bestMove] = computerSymbol;
+        setBoard(newBoard);
 
-      const winner = checkWinner(newBoard, boardSize);
-      if (winner) {
-        handleGameOver(winner === "DRAW" ? null : winner);
-      } else {
-        setXIsNext(!isX);
+        const winner = checkWinner(newBoard, boardSize);
+        if (winner) {
+          handleGameOver(winner === "DRAW" ? null : winner);
+        } else {
+          setXIsNext(!isX);
 
-        // If computer vs computer, trigger next move after delay
-        if (gameMode === GameMode.COMPUTER_VS_COMPUTER && !winner) {
-          setTimeout(() => handleComputerMove(newBoard, !isX), 1000);
+          // If computer vs computer, trigger next move after delay
+          if (gameMode === GameMode.COMPUTER_VS_COMPUTER && !winner) {
+            setTimeout(() => handleComputerMove(newBoard, !isX), 1000);
+          }
         }
       }
+    } catch (error) {
+      console.error("Error in computer move:", error);
     }
   };
 
@@ -78,7 +86,11 @@ export default function TicTacToe() {
     // If computer vs computer, start the game
     if (gameMode === GameMode.COMPUTER_VS_COMPUTER) {
       setTimeout(
-        () => handleComputerMove(Array(boardSize * boardSize).fill(null), true),
+        async () =>
+          await handleComputerMove(
+            Array(boardSize * boardSize).fill(null),
+            true
+          ),
         500
       );
     }
@@ -92,7 +104,7 @@ export default function TicTacToe() {
     setXIsNext(true);
   };
 
-  const handleClick = (index: number) => {
+  const handleClick = async (index: number) => {
     if (
       board[index] ||
       gameStatus !== GameStatus.IN_PROGRESS ||
@@ -112,7 +124,7 @@ export default function TicTacToe() {
 
       // If playing against computer, trigger computer move
       if (gameMode === GameMode.HUMAN_VS_COMPUTER && !winner) {
-        setTimeout(() => handleComputerMove(newBoard), 500);
+        setTimeout(async () => await handleComputerMove(newBoard), 500);
       }
     }
   };

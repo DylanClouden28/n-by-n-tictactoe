@@ -1,7 +1,7 @@
 // minimax.ts
 import { GameStatus } from "./page.tsx"; // Adjust path if necessary
 
-// Function to check the winner for the current board state
+// Winner checking function remains the same
 export const checkWinner = (
   board: Array<string | null>,
   boardSize: number
@@ -48,13 +48,28 @@ export const checkWinner = (
 
   return board.includes(null) ? null : "DRAW";
 };
+
+// Worker message types
+interface WorkerInput {
+  board: Array<string | null>;
+  depth: number;
+  isMaximizing: boolean;
+  boardSize: number;
+  moveIndex: number;
+  currentPlayer: string;
+}
+
+interface WorkerOutput {
+  moveIndex: number;
+  value: number;
+}
+
+// Minimax function used by workers
 const minimax = (
   board: Array<string | null>,
   depth: number,
   isMaximizing: boolean,
-  boardSize: number,
-  alpha: number = -Infinity,
-  beta: number = Infinity
+  boardSize: number
 ): number => {
   const winner = checkWinner(board, boardSize);
 
@@ -67,18 +82,9 @@ const minimax = (
     for (let i = 0; i < board.length; i++) {
       if (board[i] === null) {
         board[i] = "X";
-        const evalScore = minimax(
-          board,
-          depth + 1,
-          false,
-          boardSize,
-          alpha,
-          beta
-        );
+        const evalScore = minimax(board, depth + 1, false, boardSize);
         board[i] = null;
         maxEval = Math.max(maxEval, evalScore);
-        alpha = Math.max(alpha, evalScore);
-        if (beta <= alpha) break; // Beta cut-off
       }
     }
     return maxEval;
@@ -87,47 +93,111 @@ const minimax = (
     for (let i = 0; i < board.length; i++) {
       if (board[i] === null) {
         board[i] = "O";
-        const evalScore = minimax(
-          board,
-          depth + 1,
-          true,
-          boardSize,
-          alpha,
-          beta
-        );
+        const evalScore = minimax(board, depth + 1, true, boardSize);
         board[i] = null;
         minEval = Math.min(minEval, evalScore);
-        beta = Math.min(beta, evalScore);
-        if (beta <= alpha) break; // Alpha cut-off
       }
     }
     return minEval;
   }
 };
 
-// Function to determine the best move for the computer
-export const getBestMove = (
+// Worker code as a blob
+const workerCode = `
+  // Define the functions in the worker scope
+  const checkWinner = ${checkWinner.toString()};
+  const minimax = ${minimax.toString()};
+  
+  
+  self.onmessage = function(e) {
+    const { board, depth, isMaximizing, boardSize, moveIndex, currentPlayer } = e.data;
+    const boardCopy = [...board];
+    boardCopy[moveIndex] = currentPlayer;
+    const value = minimax(boardCopy, depth, isMaximizing, boardSize);
+    self.postMessage({ moveIndex, value });
+  };
+`;
+
+// Create a worker from the blob
+const createWorker = () => {
+  const blob = new Blob([workerCode], { type: "application/javascript" });
+  const url = URL.createObjectURL(blob);
+  const worker = new Worker(url);
+  URL.revokeObjectURL(url);
+  return worker;
+};
+
+// Main getBestMove function with worker implementation
+export const getBestMove = async (
   board: Array<string | null>,
   boardSize: number,
   currentPlayer: string
-): number => {
-  let bestMove = -1;
-  let bestValue = currentPlayer === "X" ? -Infinity : Infinity;
+): Promise<number> => {
+  // Get available moves
+  const availableMoves = board.reduce<number[]>((moves, cell, index) => {
+    if (cell === null) moves.push(index);
+    return moves;
+  }, []);
 
-  for (let i = 0; i < board.length; i++) {
-    if (board[i] === null) {
-      board[i] = currentPlayer;
-      const moveValue = minimax(board, 0, currentPlayer === "O", boardSize);
-      board[i] = null;
+  if (availableMoves.length === 0) return -1;
 
-      if (
-        (currentPlayer === "X" && moveValue > bestValue) ||
-        (currentPlayer === "O" && moveValue < bestValue)
-      ) {
-        bestValue = moveValue;
-        bestMove = i;
-      }
+  // Determine number of workers based on CPU cores and available moves
+  const maxWorkers = Math.min(
+    navigator.hardwareConcurrency || 4,
+    availableMoves.length
+  );
+  const workers: Worker[] = [];
+  const movePromises: Promise<WorkerOutput>[] = [];
+
+  try {
+    // Create workers
+    for (let i = 0; i < maxWorkers; i++) {
+      workers.push(createWorker());
     }
+
+    // Distribute work among workers
+    availableMoves.forEach((moveIndex, i) => {
+      const workerIndex = i % maxWorkers;
+      const promise = new Promise<WorkerOutput>((resolve) => {
+        workers[workerIndex].onmessage = (e) => resolve(e.data);
+      });
+
+      const workerInput: WorkerInput = {
+        board,
+        depth: 0,
+        isMaximizing: currentPlayer === "O",
+        boardSize,
+        moveIndex,
+        currentPlayer,
+      };
+
+      workers[workerIndex].postMessage(workerInput);
+      movePromises.push(promise);
+    });
+
+    // Wait for all calculations to complete
+    const results = await Promise.all(movePromises);
+
+    // Find best move
+    let bestMove = -1;
+    let bestValue = currentPlayer === "X" ? -Infinity : Infinity;
+
+    results.forEach(({ moveIndex, value }) => {
+      if (
+        (currentPlayer === "X" && value > bestValue) ||
+        (currentPlayer === "O" && value < bestValue)
+      ) {
+        bestValue = value;
+        bestMove = moveIndex;
+      }
+    });
+
+    return bestMove;
+  } catch (error) {
+    console.error("Error in getBestMove:", error);
+    throw error;
+  } finally {
+    // Clean up workers
+    workers.forEach((worker) => worker.terminate());
   }
-  return bestMove;
 };
