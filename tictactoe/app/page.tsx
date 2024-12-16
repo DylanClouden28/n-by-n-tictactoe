@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import { Minus, Plus } from "lucide-react";
-import { User, Computer, Trophy, Repeat, Swords } from "lucide-react";
+import { User, Computer, Trophy, Repeat, Swords, Loader2 } from "lucide-react";
 import { checkWinner, getBestMove } from "./minimax";
 
 enum GameMode {
@@ -20,6 +22,13 @@ enum GameStatus {
   IN_PROGRESS = "IN_PROGRESS",
   WIN = "WIN",
   DRAW = "DRAW",
+}
+
+interface GameStats {
+  winner: string | null;
+  moves: number;
+  totalIterations: number;
+  duration: number;
 }
 
 export default function TicTacToe() {
@@ -37,12 +46,88 @@ export default function TicTacToe() {
   const [debugInfo, setDebugInfo] = useState<{ iterations: number } | null>(
     null
   );
+  const [benchmarkProgress, setBenchmarkProgress] = useState(0);
+  const [benchmarkStats, setBenchmarkStats] = useState<{
+    gamesCompleted: number;
+    totalTime: number;
+    results: GameStats[];
+  }>({ gamesCompleted: 0, totalTime: 0, results: [] });
+  const [isBenchmarking, setIsBenchmarking] = useState(false);
+  const [benchMarkCount, setBenchMarkCount] = useState<number>(100);
+
+  const benchmarkRunner = async (timesToRun: number) => {
+    setIsBenchmarking(true);
+    const results: GameStats[] = [];
+    const totalStartTime = performance.now();
+
+    // Run all games
+    for (let i = 0; i < timesToRun; i++) {
+      const gameStats = await runSingleGame();
+      results.push(gameStats);
+      // Only update progress, not results
+      setBenchmarkProgress(((i + 1) / timesToRun) * 100);
+    }
+
+    const totalTime = performance.now() - totalStartTime;
+
+    // Set final results only after all games are complete
+    setBenchmarkStats({
+      gamesCompleted: timesToRun,
+      totalTime: totalTime,
+      results: results,
+    });
+    setIsBenchmarking(false);
+    setBenchmarkProgress(0); // Reset progress
+  };
+
+  const runSingleGame = async (): Promise<GameStats> => {
+    const startTime = performance.now();
+    let currentBoard = Array(boardSize * boardSize).fill(null);
+    let isX = true;
+    let moves = 0;
+    let totalIterations = 0;
+    let gameWinner = null;
+
+    while (true) {
+      const { bestMove, iterations } = getBestMove(
+        currentBoard,
+        boardSize,
+        isX ? "X" : "O",
+        4
+      );
+
+      totalIterations += iterations;
+
+      if (bestMove !== -1) {
+        currentBoard = [...currentBoard];
+        currentBoard[bestMove] = isX ? "X" : "O";
+        moves++;
+
+        const winner = checkWinner(currentBoard, boardSize);
+        if (winner) {
+          gameWinner = winner === "DRAW" ? null : winner;
+          break;
+        }
+
+        isX = !isX;
+      } else {
+        break;
+      }
+    }
+
+    const duration = performance.now() - startTime;
+    return {
+      winner: gameWinner,
+      moves,
+      totalIterations,
+      duration,
+    };
+  };
   const handleComputerMove = (
     currentBoard: Array<"X" | "O" | null>,
     isX: boolean = false
   ) => {
-    if (gameStatus !== GameStatus.IN_PROGRESS) return;
-
+    //console.log("Handling the computer move");
     const computerSymbol = isX ? "X" : "O";
     const MaxDepth = 4;
     const { bestMove, iterations } = getBestMove(
@@ -51,6 +136,8 @@ export default function TicTacToe() {
       computerSymbol,
       MaxDepth
     );
+
+    //console.log("\tBest move found: ", bestMove, " | iters: ", iterations);
 
     if (bestMove !== -1) {
       const newBoard = [...currentBoard];
@@ -66,7 +153,8 @@ export default function TicTacToe() {
 
         // If computer vs computer, trigger next move after delay
         if (gameMode === GameMode.COMPUTER_VS_COMPUTER && !winner) {
-          setTimeout(() => handleComputerMove(newBoard, !isX), 1000);
+          //console.log("\tStarting to trigger next move for computer");
+          handleComputerMove(newBoard, !isX);
         }
       }
     }
@@ -84,13 +172,23 @@ export default function TicTacToe() {
     setBoard(Array(boardSize * boardSize).fill(null));
     setXIsNext(true);
     setWinner(null);
+    setDebugInfo(null);
+    setBenchmarkProgress(0);
+    setBenchmarkStats({ gamesCompleted: 0, totalTime: 0, results: [] });
 
-    // If computer vs computer, start the game
     if (gameMode === GameMode.COMPUTER_VS_COMPUTER) {
-      setTimeout(
-        () => handleComputerMove(Array(boardSize * boardSize).fill(null), true),
-        500
-      );
+      // Run benchmark instead of single game
+      benchmarkRunner(benchMarkCount);
+    } else {
+      // Normal game modes (Human vs Human or Human vs Computer)
+      setIsBenchmarking(false);
+      if (gameMode === GameMode.HUMAN_VS_COMPUTER && !xIsNext) {
+        // If computer goes first in Human vs Computer mode
+        setTimeout(
+          () => handleComputerMove(Array(boardSize * boardSize).fill(null)),
+          500
+        );
+      }
     }
   };
 
@@ -127,6 +225,86 @@ export default function TicTacToe() {
     }
   };
 
+  const renderBenchmarkDisplay = () => {
+    if (isBenchmarking) {
+      return (
+        <div className="w-full space-y-4">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Running Benchmark...</span>
+          </div>
+          <Progress value={benchmarkProgress} className="w-full" />
+          <p className="text-sm text-muted-foreground">
+            Completed {Math.floor((benchmarkProgress / 100) * benchMarkCount)}{" "}
+            of {benchMarkCount} games
+          </p>
+        </div>
+      );
+    }
+
+    if (!isBenchmarking && benchmarkStats.results.length > 0) {
+      const totalGames = benchmarkStats.results.length;
+      const winCounts = benchmarkStats.results.reduce((counts, game) => {
+        const result = game.winner || "Draw";
+        counts[result] = (counts[result] || 0) + 1;
+        return counts;
+      }, {} as Record<string, number>);
+
+      const avgMoves =
+        benchmarkStats.results.reduce((sum, game) => sum + game.moves, 0) /
+        totalGames;
+      const avgTime =
+        benchmarkStats.results.reduce((sum, game) => sum + game.duration, 0) /
+        totalGames;
+
+      // Calculate iteration statistics
+      const totalIterations = benchmarkStats.results.reduce(
+        (sum, game) => sum + game.totalIterations,
+        0
+      );
+      const avgIterationsPerGame = totalIterations / totalGames;
+
+      return (
+        <div className="w-full space-y-4">
+          <h3 className="text-lg font-semibold">Benchmark Results</h3>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Games Statistics</p>
+              <div className="space-y-1 text-sm text-muted-foreground">
+                <p>Total Games: {totalGames}</p>
+                <p>Average Moves: {avgMoves.toFixed(1)}</p>
+                <p>
+                  Total Time: {(benchmarkStats.totalTime / 1000).toFixed(2)}s
+                </p>
+                <p>Average Time per Game: {(avgTime / 1000).toFixed(2)}s</p>
+                <p>Total Iterations: {totalIterations.toLocaleString()}</p>
+                <p>
+                  Iterations per Game:{" "}
+                  {avgIterationsPerGame.toLocaleString(undefined, {
+                    maximumFractionDigits: 0,
+                  })}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Game Outcomes</p>
+              <div className="space-y-1 text-sm text-muted-foreground">
+                {Object.entries(winCounts).map(([result, count]) => (
+                  <p key={result}>
+                    {result}: {count} ({((count / totalGames) * 100).toFixed(1)}
+                    %)
+                  </p>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  };
+
   const renderGameModeSelection = () => (
     <div className="space-y-4 mb-6">
       <Label className="text-lg">Select Game Mode</Label>
@@ -156,15 +334,14 @@ export default function TicTacToe() {
             gameMode === GameMode.COMPUTER_VS_COMPUTER ? "default" : "outline"
           }
           onClick={() => setGameMode(GameMode.COMPUTER_VS_COMPUTER)}
-          className="flex gap-2 items-center flex-col"
-          disabled={true}
+          className="flex gap-2 items-center flex-col h-full"
         >
           <div className="flex gap-2 flex-row">
             <Computer className="h-4 w-4" />
             vs
             <Computer className="h-4 w-4" />
           </div>
-          <Label className="text-sm">Currently broken</Label>
+          <Label className="text-sm">Runs Benchmark</Label>
         </Button>
       </div>
     </div>
@@ -210,11 +387,66 @@ export default function TicTacToe() {
       <Card className="w-full max-w-[90vh] p-6 space-y-6">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold">Tic Tac Toe</h1>
-          {renderGameStatus()}
+          {benchmarkStats.results.length === 0 && renderGameStatus()}
         </div>
 
-        {!isGameStarted && renderGameModeSelection()}
-        {!isGameStarted && (
+        {/* Show game mode selection if not started and no benchmark results */}
+        {!isGameStarted &&
+          benchmarkStats.results.length === 0 &&
+          renderGameModeSelection()}
+
+        {/* Show either benchmark progress/results or game board */}
+        {isGameStarted && (
+          <>
+            {/* Show benchmark progress or results */}
+            {(isBenchmarking ||
+              (gameMode === GameMode.COMPUTER_VS_COMPUTER &&
+                benchmarkStats.results.length > 0)) &&
+              renderBenchmarkDisplay()}
+
+            {/* Only show game board for non-benchmark modes */}
+            {gameMode !== GameMode.COMPUTER_VS_COMPUTER && (
+              <div className="flex flex-col justify-center items-center">
+                {debugInfo && (
+                  <div className="p-2">
+                    <Badge className="text-lg">
+                      Number of iterations: {debugInfo.iterations}
+                    </Badge>
+                  </div>
+                )}
+                <div
+                  className="grid gap-2 max-w-lg"
+                  style={{
+                    gridTemplateColumns: `repeat(${boardSize}, 1fr)`,
+                    aspectRatio: "1/1",
+                    width: "100%",
+                  }}
+                >
+                  {Array(boardSize * boardSize)
+                    .fill(null)
+                    .map((_, index) => (
+                      <Button
+                        key={index}
+                        variant="outline"
+                        className="aspect-square flex items-center justify-center p-0 text-3xl font-bold w-full h-full"
+                        onClick={() => handleClick(index)}
+                        disabled={
+                          gameStatus !== GameStatus.IN_PROGRESS ||
+                          board[index] !== null ||
+                          (gameMode === GameMode.HUMAN_VS_COMPUTER && !xIsNext)
+                        }
+                      >
+                        {board[index]}
+                      </Button>
+                    ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Show board size and benchmark count controls */}
+        {!isGameStarted && benchmarkStats.results.length === 0 && (
           <div className="space-y-2 flex flex-col items-center">
             <Label className="text-lg">
               Board Size: {boardSize}x{boardSize}
@@ -240,10 +472,23 @@ export default function TicTacToe() {
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+            {gameMode === GameMode.COMPUTER_VS_COMPUTER && (
+              <>
+                <span>Enter number of times to run benchmark (1-100)</span>
+                <Input
+                  type="number"
+                  defaultValue={benchMarkCount}
+                  onChange={(e) => {
+                    setBenchMarkCount(Number(e.target.value));
+                  }}
+                />
+              </>
+            )}
           </div>
         )}
 
-        {!isGameStarted ? (
+        {/* Show appropriate button based on state */}
+        {!isGameStarted && benchmarkStats.results.length === 0 ? (
           <Button
             variant="default"
             className="w-full text-lg py-6"
@@ -252,45 +497,6 @@ export default function TicTacToe() {
             Start Game
           </Button>
         ) : (
-          <div className="flex flex-col justify-center items-center">
-            {debugInfo && (
-              <div className="p-2">
-                <Badge className="text-lg">
-                  Number of iterations: {debugInfo.iterations}
-                </Badge>
-              </div>
-            )}
-            <div
-              className="grid gap-2 max-w-lg"
-              style={{
-                gridTemplateColumns: `repeat(${boardSize}, 1fr)`,
-                aspectRatio: "1/1",
-                width: "100%",
-              }}
-            >
-              {Array(boardSize * boardSize)
-                .fill(null)
-                .map((_, index) => (
-                  <Button
-                    key={index}
-                    variant="outline"
-                    className="aspect-square flex items-center justify-center p-0 text-3xl font-bold w-full h-full"
-                    onClick={() => handleClick(index)}
-                    disabled={
-                      gameMode === GameMode.COMPUTER_VS_COMPUTER ||
-                      gameStatus !== GameStatus.IN_PROGRESS ||
-                      board[index] !== null ||
-                      (gameMode === GameMode.HUMAN_VS_COMPUTER && !xIsNext)
-                    }
-                  >
-                    {board[index]}
-                  </Button>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {isGameStarted && (
           <Button
             variant="default"
             className="w-full text-lg py-6"
@@ -301,6 +507,13 @@ export default function TicTacToe() {
               setXIsNext(true);
               setWinner(null);
               setDebugInfo(null);
+              // Clear benchmark results when starting new game/benchmark
+              setBenchmarkStats({
+                gamesCompleted: 0,
+                totalTime: 0,
+                results: [],
+              });
+              setBenchmarkProgress(0);
             }}
           >
             New Game
