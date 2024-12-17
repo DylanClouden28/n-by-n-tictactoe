@@ -1,4 +1,4 @@
-import { evalBoardState, minimax } from "./minimax";
+import { evalBoardState, minimax } from "./minimax_depthLimit";
 
 const testBoardState = () => {
   //Before win
@@ -33,7 +33,7 @@ const testBoardState = () => {
   result = evalBoardState(board2, boardSize);
   console.log("Result: ", result);
 
-  let resultMinimax = minimax(
+  const resultMinimax = minimax(
     board2,
     0,
     currentPlayer === "O",

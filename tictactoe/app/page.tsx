@@ -1,15 +1,33 @@
 "use client";
 
-import { use, useState } from "react";
+import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Minus, Plus } from "lucide-react";
-import { User, Computer, Trophy, Repeat, Swords, Loader2 } from "lucide-react";
-import { checkWinner, getBestMove } from "./minimax";
+import {
+  User,
+  Computer,
+  Trophy,
+  Repeat,
+  Swords,
+  Loader2,
+  LoaderCircle,
+} from "lucide-react";
+import { checkWinner, getBestMove } from "./minimax_depthLimit";
+import { getBestMove as getBestMoveAlphaBeta } from "./minimax_alphabeta";
+import { getBestMove as getBestMoveMultithreading } from "./minimax_multithreading";
+import { getBestMove as getBestMovePlain } from "./minimax_plain";
 
 enum GameMode {
   HUMAN_VS_HUMAN = "HUMAN_VS_HUMAN",
@@ -29,6 +47,13 @@ interface GameStats {
   moves: number;
   totalIterations: number;
   duration: number;
+}
+
+enum MinimaxImplementation {
+  PLAIN = "PLAIN (Very Slow)",
+  DEPTH_LIMIT = "DEPTH_LIMIT",
+  ALPHA_BETA = "ALPHA_BETA",
+  MULTITHREADING = "MULTITHREADING",
 }
 
 export default function TicTacToe() {
@@ -54,33 +79,62 @@ export default function TicTacToe() {
   }>({ gamesCompleted: 0, totalTime: 0, results: [] });
   const [isBenchmarking, setIsBenchmarking] = useState(false);
   const [benchMarkCount, setBenchMarkCount] = useState<number>(100);
+  const [minimaxImpl, setMinimaxImpl] = useState<MinimaxImplementation>(
+    MinimaxImplementation.DEPTH_LIMIT
+  );
 
   const benchmarkRunner = async (timesToRun: number) => {
+    //console.log("Starting benchmark with implementation:", minimaxImpl);
     setIsBenchmarking(true);
     const results: GameStats[] = [];
     const totalStartTime = performance.now();
+    const updateInterval = Math.max(Math.floor(timesToRun / 10), 1);
 
-    // Run all games
     for (let i = 0; i < timesToRun; i++) {
+      //console.log(`Starting game ${i + 1}/${timesToRun}`);
       const gameStats = await runSingleGame();
+      //console.log(`Completed game ${i + 1}, stats:`, gameStats);
       results.push(gameStats);
-      // Only update progress, not results
-      setBenchmarkProgress(((i + 1) / timesToRun) * 100);
+
+      if (i % updateInterval === 0 || i === timesToRun - 1) {
+        setBenchmarkProgress(((i + 1) / timesToRun) * 100);
+        await new Promise(requestAnimationFrame);
+      }
     }
 
     const totalTime = performance.now() - totalStartTime;
+    //console.log("Benchmark complete, total time:", totalTime);
 
-    // Set final results only after all games are complete
     setBenchmarkStats({
       gamesCompleted: timesToRun,
       totalTime: totalTime,
       results: results,
     });
     setIsBenchmarking(false);
-    setBenchmarkProgress(0); // Reset progress
+    setBenchmarkProgress(0);
+  };
+
+  const getBestMoveForImplementation = async (
+    board: Array<"X" | "O" | null>,
+    size: number,
+    player: "X" | "O",
+    depth: number
+  ) => {
+    switch (minimaxImpl) {
+      case MinimaxImplementation.PLAIN:
+        return getBestMovePlain(board, size, player);
+      case MinimaxImplementation.ALPHA_BETA:
+        return getBestMoveAlphaBeta(board, size, player);
+      case MinimaxImplementation.MULTITHREADING:
+        return await getBestMoveMultithreading(board, size, player);
+      case MinimaxImplementation.DEPTH_LIMIT:
+      default:
+        return getBestMove(board, size, player, depth);
+    }
   };
 
   const runSingleGame = async (): Promise<GameStats> => {
+    //console.log("Starting new game");
     const startTime = performance.now();
     let currentBoard = Array(boardSize * boardSize).fill(null);
     let isX = true;
@@ -88,46 +142,58 @@ export default function TicTacToe() {
     let totalIterations = 0;
     let gameWinner = null;
 
-    while (true) {
-      const { bestMove, iterations } = getBestMove(
-        currentBoard,
-        boardSize,
-        isX ? "X" : "O",
-        4
-      );
+    try {
+      while (true) {
+        //console.log(`Move ${moves + 1}, player: ${isX ? "X" : "O"}`);
+        const { bestMove, iterations } = await getBestMoveForImplementation(
+          currentBoard,
+          boardSize,
+          isX ? "X" : "O",
+          4
+        );
+        //console.log(`Received move: ${bestMove}, iterations: ${iterations}`);
 
-      totalIterations += iterations;
+        totalIterations += iterations;
 
-      if (bestMove !== -1) {
-        currentBoard = [...currentBoard];
-        currentBoard[bestMove] = isX ? "X" : "O";
-        moves++;
+        if (bestMove !== -1) {
+          currentBoard = [...currentBoard];
+          currentBoard[bestMove] = isX ? "X" : "O";
+          moves++;
+          //console.log("Current board:", currentBoard);
 
-        const winner = checkWinner(currentBoard, boardSize);
-        if (winner) {
-          gameWinner = winner === "DRAW" ? null : winner;
+          const winner = checkWinner(currentBoard, boardSize);
+          if (winner) {
+            gameWinner = winner === "DRAW" ? null : winner;
+            //console.log("Game complete with winner:", gameWinner);
+            break;
+          }
+
+          isX = !isX;
+        } else {
+          //console.log("No valid move found, ending game");
           break;
         }
-
-        isX = !isX;
-      } else {
-        break;
       }
-    }
 
-    const duration = performance.now() - startTime;
-    return {
-      winner: gameWinner,
-      moves,
-      totalIterations,
-      duration,
-    };
+      const duration = performance.now() - startTime;
+      const stats = {
+        winner: gameWinner,
+        moves,
+        totalIterations,
+        duration,
+      };
+      //console.log("Game complete, stats:", stats);
+      return stats;
+    } catch (error) {
+      console.error("Game error:", error);
+      throw error;
+    }
   };
+
   const handleComputerMove = (
     currentBoard: Array<"X" | "O" | null>,
     isX: boolean = false
   ) => {
-    //console.log("Handling the computer move");
     const computerSymbol = isX ? "X" : "O";
     const MaxDepth = 4;
     const { bestMove, iterations } = getBestMove(
@@ -226,6 +292,7 @@ export default function TicTacToe() {
   };
 
   const renderBenchmarkDisplay = () => {
+    // Always show progress while benchmarking
     if (isBenchmarking) {
       return (
         <div className="w-full space-y-4">
@@ -242,7 +309,9 @@ export default function TicTacToe() {
       );
     }
 
-    if (!isBenchmarking && benchmarkStats.results.length > 0) {
+    // Show results when done
+    if (benchmarkStats.results.length > 0) {
+      // Removed !isBenchmarking condition
       const totalGames = benchmarkStats.results.length;
       const winCounts = benchmarkStats.results.reduce((counts, game) => {
         const result = game.winner || "Draw";
@@ -257,7 +326,6 @@ export default function TicTacToe() {
         benchmarkStats.results.reduce((sum, game) => sum + game.duration, 0) /
         totalGames;
 
-      // Calculate iteration statistics
       const totalIterations = benchmarkStats.results.reduce(
         (sum, game) => sum + game.totalIterations,
         0
@@ -473,16 +541,42 @@ export default function TicTacToe() {
               </Button>
             </div>
             {gameMode === GameMode.COMPUTER_VS_COMPUTER && (
-              <>
-                <span>Enter number of times to run benchmark (1-100)</span>
-                <Input
-                  type="number"
-                  defaultValue={benchMarkCount}
-                  onChange={(e) => {
-                    setBenchMarkCount(Number(e.target.value));
-                  }}
-                />
-              </>
+              <div className="space-y-4 w-full max-w-xs mx-auto">
+                <div className="space-y-2">
+                  <Label>Minimax Implementation</Label>
+                  <Select
+                    value={minimaxImpl}
+                    onValueChange={(value) =>
+                      setMinimaxImpl(value as MinimaxImplementation)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select implementation" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.values(MinimaxImplementation).map((impl) => (
+                        <SelectItem key={impl} value={impl}>
+                          {impl.replace("_", " ")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Number of benchmark runs (1-100)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="100"
+                    defaultValue={benchMarkCount}
+                    onChange={(e) => {
+                      const value = Number(e.target.value);
+                      setBenchMarkCount(Math.min(100, Math.max(1, value)));
+                    }}
+                  />
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -494,7 +588,7 @@ export default function TicTacToe() {
             className="w-full text-lg py-6"
             onClick={startGame}
           >
-            Start Game
+            {isBenchmarking ? <LoaderCircle></LoaderCircle> : "Start Game"}
           </Button>
         ) : (
           <Button

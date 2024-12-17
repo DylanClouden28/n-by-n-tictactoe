@@ -154,7 +154,7 @@ export const evalBoardState = (
     }
   }
 
-  let totalScore = { X: 0, O: 0 };
+  const totalScore = { X: 0, O: 0 };
 
   //Add rows, columns, and diagonals to total score for each X and O
   for (const symbol of ["X", "O"] as Array<"X" | "O">) {
